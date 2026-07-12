@@ -38,7 +38,7 @@ export default function VideoStream({ isTargetRegistered, targetData }) {
             src="http://localhost:8000/api/stream" 
             alt="Live Surveillance Feed" 
             className="preview-image"
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
           />
         ) : (
           <div className="video-placeholder idle-feed">
