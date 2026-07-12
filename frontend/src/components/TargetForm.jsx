@@ -16,17 +16,44 @@ export default function TargetForm({ onTargetRegister }) {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    // Simulate target registration request
-    setTimeout(() => {
+
+    const fileInput = e.target.querySelector('input[type="file"]');
+    const file = fileInput?.files[0];
+    if (!file) {
+      alert("Please select a target photo first!");
       setLoading(false);
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("color_name", colorName);
+
+    try {
+      const response = await fetch("http://localhost:8000/api/register", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to register target on the server.");
+      }
+
+      const result = await response.json();
       onTargetRegister({
         colorName,
-        imagePreview: preview
+        imagePreview: preview,
+        faceDetected: result.face_detected,
+        dominantColorHsv: result.dominant_color_hsv
       });
-    }, 1500);
+    } catch (err) {
+      alert("Error registering target profile: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

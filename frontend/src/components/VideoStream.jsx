@@ -3,8 +3,26 @@ import React, { useState } from 'react';
 export default function VideoStream({ isTargetRegistered, targetData }) {
   const [active, setActive] = useState(false);
 
-  const toggleStream = () => {
-    setActive(!active);
+  const [loading, setLoading] = useState(false);
+
+  const toggleStream = async () => {
+    setLoading(true);
+    const apiEndpoint = active ? "stop" : "start";
+    try {
+      const response = await fetch(`http://localhost:8000/api/${apiEndpoint}`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to ${apiEndpoint} surveillance feed.`);
+      }
+
+      setActive(!active);
+    } catch (err) {
+      alert(`Error toggling camera feed: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -50,9 +68,9 @@ export default function VideoStream({ isTargetRegistered, targetData }) {
         <button 
           onClick={toggleStream} 
           className={`btn ${active ? 'btn-danger' : 'btn-success'}`}
-          disabled={!isTargetRegistered && !active}
+          disabled={(!isTargetRegistered && !active) || loading}
         >
-          {active ? "Stop Surveillance Feed" : "Start Live Surveillance"}
+          {loading ? "Processing..." : (active ? "Stop Surveillance Feed" : "Start Live Surveillance")}
         </button>
         {!isTargetRegistered && !active && (
           <p className="status-hint font-mono text-warning">⚠️ Please register a target profile first</p>

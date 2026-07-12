@@ -18,3 +18,9 @@ ultralytics>=8.0.0
 # Face Detection & Embedding Verification
 insightface>=0.7.3
 onnxruntime>=1.16.0    # For CPU execution. Replace with 'onnxruntime-gpu' if using GPU acceleration.
+
+# Web API Framework (for Frontend Integration)
+fastapi>=0.100.0
+uvicorn>=0.20.0
+python-multipart>=0.0.6
+

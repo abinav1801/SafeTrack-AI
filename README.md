@@ -23,6 +23,7 @@ SafeTrack AI is an automated video surveillance pipeline engineered to locate sp
 ```text
 ├── backend/
 │   ├── app.py                     # Main execution loop & CLI coordinator
+│   ├── server.py                  # FastAPI server wrapper for real-time UI integration
 │   └── utils/
 │       ├── color_matching.py      # Torso isolation, K-Means, and HSV similarity
 │       └── face_matching.py       # Spatial mapping & InsightFace operations
@@ -40,3 +41,28 @@ SafeTrack AI is an automated video surveillance pipeline engineered to locate sp
 └── storage/
     └── uploads/
         └── target.jpg             # Reference photo uploaded via user interface
+
+---
+
+## 🚀 How to Run the Application
+
+To run the unified SafeTrack AI system (both backend API server and frontend React dashboard):
+
+### 1. Launch the Backend API Server
+Open a terminal in the project root (`c:\HackZen`), activate your Conda environment, and run `server.py`:
+```bash
+conda activate safetrack
+python backend/server.py
+```
+This starts the backend FastAPI server on `http://127.0.0.1:8000`.
+
+### 2. Launch the React Frontend Dashboard
+Open a separate terminal, navigate to the `frontend/` directory, and start the development server:
+```bash
+cd frontend
+npm run dev
+```
+Open `http://localhost:5173` in your browser. You can now:
+- Upload any portrait photo under **Biometric Registration** and select an optional manual color override.
+- Click **"Register Target Profile"** to upload the photo to the backend, run face registration, and extract clothing signatures.
+- Click **"Start Live Surveillance"** to launch the camera feed window on your laptop screen and begin real-time tracking directly from your browser!
