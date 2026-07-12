@@ -258,8 +258,8 @@ def gen_frames():
                         face_sim = calculate_face_similarity(target_face_embedding, associated_face.normed_embedding)
                         face_sim_str = f"{face_sim * 100.0:.1f}%"
                         
-                        # 1. Target face similarity above 65.0% -> Target Person Found
-                        if face_sim >= 0.65:
+                        # 1. Target face similarity above 55.0% -> Target Person Found
+                        if face_sim >= 0.55:
                             is_target = True
                             confidence_pct = face_sim * 100.0
                             label = f"Target Person Found [{confidence_pct:.1f}%]"
