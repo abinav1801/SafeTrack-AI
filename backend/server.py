@@ -107,7 +107,9 @@ async def register_target(
     color_thresh_ratio = 0.50  # Reset
     color_override_name = color_name
     
-    # 1. Target Face Verification (at 640x640)
+    # 1. Target Face Verification (force det_size to 640x640 for small template images)
+    ctx_id = 0 if torch.cuda.is_available() else -1
+    face_matcher.app.prepare(ctx_id=ctx_id, det_size=(640, 640))
     target_faces = face_matcher.app.get(target_img)
     if len(target_faces) == 0:
         # Fallback 1: CLAHE enhancement
@@ -241,7 +243,7 @@ def gen_frames():
                 label = ""
                 
                 # Human Bounding Box Constraints
-                if box_area < 40000 or aspect_ratio > 1.6:
+                if box_area < 15000 or aspect_ratio > 1.6:
                     face_sim_str = "N/A (Filtered Shape)"
                 else:
                     associated_face_info = face_to_person_map.get(idx)

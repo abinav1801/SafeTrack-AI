@@ -322,8 +322,8 @@ def main():
             face_sim_str = "N/A"
             label = ""
             
-            # Human Shape Rule: wider boxes (ratio > 1.6, like stretched arm) or small boxes (area < 40000) are bypassed
-            if box_area < 40000 or aspect_ratio > 1.6:
+            # Human Shape Rule: wider boxes (ratio > 1.6, like stretched arm) or small boxes (area < 15000) are bypassed
+            if box_area < 15000 or aspect_ratio > 1.6:
                 face_sim_str = "N/A (Filtered Shape)"
             else:
                 # Query face coordinates to center the torso crop below the chin if available
