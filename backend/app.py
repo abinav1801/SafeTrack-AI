@@ -121,6 +121,7 @@ def main():
             backend_candidate = os.path.join("backend", target_path)
             if os.path.exists(backend_candidate):
                 target_path = backend_candidate
+    target_path = os.path.abspath(target_path)
 
     if not os.path.exists(target_path):
         print(f"[ERROR] Target photo not found at: '{args.target}'")
