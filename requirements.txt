@@ -1,0 +1,20 @@
+# SafeTrack AI - Backend Dependency Requirements
+# Install with: pip install -r requirements.txt
+
+# Deep Learning Framework
+torch>=2.0.0
+
+# Mathematical & Optimization Utilities
+numpy>=1.24.0
+scipy>=1.10.0          # Required for optimal face assignment (Hungarian algorithm)
+
+# Computer Vision & Visualization
+opencv-python>=4.8.0
+supervision>=0.20.0
+
+# Object Detection (YOLO)
+ultralytics>=8.0.0
+
+# Face Detection & Embedding Verification
+insightface>=0.7.3
+onnxruntime>=1.16.0    # For CPU execution. Replace with 'onnxruntime-gpu' if using GPU acceleration.
