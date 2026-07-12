@@ -30,8 +30,6 @@ color_thresh_ratio = 0.50
 face_thresh_ratio = 0.45
 color_override_name = "none"
 
-cap = None
-cap_lock = threading.Lock()
 is_running = False
 yolo_model = None
 face_matcher = None
@@ -174,13 +172,10 @@ async def register_target(
     }
 
 def gen_frames():
-    global is_running, cap, yolo_model, face_matcher, target_face_embedding, target_color_hsv, color_thresh_ratio, face_thresh_ratio
+    global is_running, yolo_model, face_matcher, target_face_embedding, target_color_hsv, color_thresh_ratio, face_thresh_ratio
     
-    with cap_lock:
-        if cap is None:
-            cap = cv2.VideoCapture(0)
-            
-    if not cap.isOpened():
+    local_cap = cv2.VideoCapture(0)
+    if not local_cap.isOpened():
         print("[ERROR] Cannot open webcam index 0.")
         is_running = False
         return
@@ -194,7 +189,7 @@ def gen_frames():
     
     try:
         while is_running:
-            ret, frame = cap.read()
+            ret, frame = local_cap.read()
             if not ret:
                 break
                 
@@ -303,11 +298,8 @@ def gen_frames():
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
     finally:
-        # Guarantee camera release when generator is closed
-        with cap_lock:
-            if cap is not None:
-                cap.release()
-                cap = None
+        # Release the local camera capture resource
+        local_cap.release()
         print("[INFO] Camera stream generator terminated and camera released.")
 
 @app.post("/api/start")
