@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import torch
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
 
@@ -29,7 +30,8 @@ color_thresh_ratio = 0.50
 face_thresh_ratio = 0.45
 color_override_name = "none"
 
-surveillance_thread = None
+cap = None
+cap_lock = threading.Lock()
 is_running = False
 yolo_model = None
 face_matcher = None
@@ -171,159 +173,164 @@ async def register_target(
         "dominant_color_hsv": target_color_hsv.tolist() if target_color_hsv is not None else None
     }
 
-def run_surveillance():
-    global is_running, face_matcher, yolo_model, target_face_embedding, target_color_hsv, color_thresh_ratio, face_thresh_ratio
+def gen_frames():
+    global is_running, cap, yolo_model, face_matcher, target_face_embedding, target_color_hsv, color_thresh_ratio, face_thresh_ratio
     
-    print("[INFO] Re-configuring face detector resolution to 1280x1280 for webcam surveillance...")
-    ctx_id = 0 if torch.cuda.is_available() else -1
-    face_matcher.app.prepare(ctx_id=ctx_id, det_size=(1280, 1280))
-    
-    cap = cv2.VideoCapture(0)
+    with cap_lock:
+        if cap is None:
+            cap = cv2.VideoCapture(0)
+            
     if not cap.isOpened():
-        print("[ERROR] Cannot open webcam device index 0. Thread exiting.")
+        print("[ERROR] Cannot open webcam index 0.")
         is_running = False
         return
         
-    print("[SUCCESS] Surveillance capture active. Processing camera frames.")
+    print("[SUCCESS] Live camera MJPEG streaming active.")
     
-    while cap.isOpened() and is_running:
-        ret, frame = cap.read()
-        if not ret:
-            print("[WARN] Failed to grab camera frame.")
-            break
-            
-        enhanced_frame = frame.copy()
-        
-        # A. Detect all people inside the frame using YOLOv8
-        results = yolo_model(frame, classes=[0], device="cpu", verbose=False)
-        boxes = results[0].boxes.xyxy.cpu().numpy()
-        
-        # B. Local CLAHE enhancement for backlit faces
-        for idx, person_box in enumerate(boxes):
-            px1, py1, px2, py2 = map(int, person_box)
-            h = py2 - py1
-            hy2 = int(py1 + 0.45 * h)
-            hy2 = max(py1 + 1, min(hy2, py2))
-            
-            head_crop = frame[py1:hy2, px1:px2]
-            if head_crop.size == 0:
-                continue
+    # Scale face detector resolution to 1280x1280 for webcam surveillance
+    print("[INFO] Scaling face detector resolution to 1280x1280 for live feed tracking...")
+    ctx_id = 0 if torch.cuda.is_available() else -1
+    face_matcher.app.prepare(ctx_id=ctx_id, det_size=(1280, 1280))
+    
+    try:
+        while is_running:
+            ret, frame = cap.read()
+            if not ret:
+                break
                 
-            lab = cv2.cvtColor(head_crop, cv2.COLOR_BGR2LAB)
-            l, a, b = cv2.split(lab)
-            mean_l = np.mean(l)
+            enhanced_frame = frame.copy()
             
-            if mean_l < 115:
-                clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-                cl = clahe.apply(l)
-                enhanced_head = cv2.cvtColor(cv2.merge((cl, a, b)), cv2.COLOR_LAB2BGR)
-                enhanced_frame[py1:hy2, px1:px2] = enhanced_head
-                
-        # C. Detect faces in enhanced frame & map them to person bounding boxes
-        frame_faces = face_matcher.app.get(enhanced_frame)
-        face_to_person_map = face_matcher.match_faces_to_people(boxes, frame_faces)
-        
-        # D. Match prioritizations
-        for idx, person_box in enumerate(boxes):
-            px1, py1, px2, py2 = map(int, person_box)
-            box_width = px2 - px1
-            box_height = py2 - py1
-            box_area = box_width * box_height
-            aspect_ratio = box_width / float(box_height) if box_height > 0 else 0.0
+            # 1. Run YOLOv8 person detection
+            results = yolo_model(frame, classes=[0], device="cpu", verbose=False)
+            boxes = results[0].boxes.xyxy.cpu().numpy()
             
-            is_target = False
-            is_potential = False
-            confidence_pct = 0.0
-            color_sim = 0.0
-            face_sim = 0.0
-            face_sim_str = "N/A"
-            
-            # Human Bounding Box Constraints
-            if box_area < 40000 or aspect_ratio > 1.6:
-                face_sim_str = "N/A (Filtered Shape)"
-            else:
-                associated_face_info = face_to_person_map.get(idx)
-                associated_face = associated_face_info["face"] if associated_face_info is not None else None
-                face_bbox = associated_face.bbox if associated_face is not None else None
+            # 2. Local CLAHE enhancement for backlit faces
+            for idx, person_box in enumerate(boxes):
+                px1, py1, px2, py2 = map(int, person_box)
+                h = py2 - py1
+                hy2 = int(py1 + 0.45 * h)
+                hy2 = max(py1 + 1, min(hy2, py2))
                 
-                # Priority 1: Torso clothing HSV crop and matching
-                clothing_crop = extract_clothing_region(frame, person_box, face_bbox=face_bbox)
-                dominant_hsv, color_conf = get_dominant_color_hsv(clothing_crop)
-                
-                if target_color_hsv is not None:
-                    color_sim = calculate_color_similarity(target_color_hsv, dominant_hsv)
+                head_crop = frame[py1:hy2, px1:px2]
+                if head_crop.size == 0:
+                    continue
                     
-                # Priority 2: Biometric verification
-                if target_face_embedding is not None and associated_face is not None:
-                    face_sim = calculate_face_similarity(target_face_embedding, associated_face.normed_embedding)
-                    face_sim_str = f"{face_sim * 100.0:.1f}%"
+                lab = cv2.cvtColor(head_crop, cv2.COLOR_BGR2LAB)
+                l, a, b = cv2.split(lab)
+                mean_l = np.mean(l)
+                
+                if mean_l < 115:
+                    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+                    cl = clahe.apply(l)
+                    enhanced_head = cv2.cvtColor(cv2.merge((cl, a, b)), cv2.COLOR_LAB2BGR)
+                    enhanced_frame[py1:hy2, px1:px2] = enhanced_head
                     
-                    # Match Decision Logic
-                    if face_sim >= 0.58:  # Biometric override bypass
-                        is_target = True
-                        confidence_pct = 70.0 + ((face_sim - 0.58) / 0.27) * 28.0
-                        confidence_pct = min(99.9, max(70.0, confidence_pct))
-                    elif color_sim >= color_thresh_ratio and face_sim >= face_thresh_ratio:
-                        is_target = True
-                        denom = 0.85 - face_thresh_ratio
-                        if denom <= 0:
-                            denom = 0.01
-                        confidence_pct = 70.0 + ((face_sim - face_thresh_ratio) / denom) * 28.0
-                        confidence_pct = min(99.9, max(70.0, confidence_pct))
-                    elif color_sim >= color_thresh_ratio:
-                        is_potential = True
-                elif target_face_embedding is None:
-                    if color_sim >= color_thresh_ratio:
-                        is_target = True
-                        confidence_pct = color_sim * 100.0
+            # 3. Detect faces and map to people
+            frame_faces = face_matcher.app.get(enhanced_frame)
+            face_to_person_map = face_matcher.match_faces_to_people(boxes, frame_faces)
+            
+            # 4. Math matching logic and annotation drawing
+            for idx, person_box in enumerate(boxes):
+                px1, py1, px2, py2 = map(int, person_box)
+                box_width = px2 - px1
+                box_height = py2 - py1
+                box_area = box_width * box_height
+                aspect_ratio = box_width / float(box_height) if box_height > 0 else 0.0
+                
+                is_target = False
+                is_potential = False
+                confidence_pct = 0.0
+                color_sim = 0.0
+                face_sim = 0.0
+                face_sim_str = "N/A"
+                
+                # Human Bounding Box Constraints
+                if box_area < 40000 or aspect_ratio > 1.6:
+                    face_sim_str = "N/A (Filtered Shape)"
+                else:
+                    associated_face_info = face_to_person_map.get(idx)
+                    associated_face = associated_face_info["face"] if associated_face_info is not None else None
+                    face_bbox = associated_face.bbox if associated_face is not None else None
+                    
+                    clothing_crop = extract_clothing_region(frame, person_box, face_bbox=face_bbox)
+                    dominant_hsv, color_conf = get_dominant_color_hsv(clothing_crop)
+                    
+                    if target_color_hsv is not None:
+                        color_sim = calculate_color_similarity(target_color_hsv, dominant_hsv)
                         
-            print(f"[DEBUG] Person Box: Color Similarity: {color_sim * 100.0:.1f}%, Face Similarity: {face_sim_str}")
-            
-            # E. Annotate bounding boxes based on match outcome
-            if is_target:
-                box_color = (0, 255, 0)
-                label = f"TARGET MATCHED [{confidence_pct:.1f}%]"
-            elif is_potential:
-                box_color = (0, 128, 255)
-                label = f"POTENTIAL TARGET [Color Sim: {color_sim * 100.0:.1f}%]"
-            else:
-                box_color = (255, 0, 0)
-                label = f"Person (C:{color_sim * 100.0:.1f}%)"
+                    if target_face_embedding is not None and associated_face is not None:
+                        face_sim = calculate_face_similarity(target_face_embedding, associated_face.normed_embedding)
+                        face_sim_str = f"{face_sim * 100.0:.1f}%"
+                        
+                        # Match logic rules
+                        if face_sim >= 0.58:  # Biometric override
+                            is_target = True
+                            confidence_pct = 70.0 + ((face_sim - 0.58) / 0.27) * 28.0
+                            confidence_pct = min(99.9, max(70.0, confidence_pct))
+                        elif color_sim >= color_thresh_ratio and face_sim >= face_thresh_ratio:
+                            is_target = True
+                            denom = 0.85 - face_thresh_ratio
+                            if denom <= 0:
+                                denom = 0.01
+                            confidence_pct = 70.0 + ((face_sim - face_thresh_ratio) / denom) * 28.0
+                            confidence_pct = min(99.9, max(70.0, confidence_pct))
+                        elif color_sim >= color_thresh_ratio:
+                            is_potential = True
+                    elif target_face_embedding is None:
+                        if color_sim >= color_thresh_ratio:
+                            is_target = True
+                            confidence_pct = color_sim * 100.0
+                            
+                print(f"[DEBUG] Person Box: Color Similarity: {color_sim * 100.0:.1f}%, Face Similarity: {face_sim_str}")
                 
-            cv2.rectangle(frame, (px1, py1), (px2, py2), box_color, 2)
-            cv2.putText(frame, label, (px1, py1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, box_color, 2)
-            
-        cv2.imshow("SafeTrack AI - CCTV Surveillance", frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-            
-    cap.release()
-    cv2.destroyAllWindows()
-    is_running = False
-    print("[INFO] Webcam surveillance feed released.")
+                if is_target:
+                    box_color = (0, 255, 0)
+                    label = f"TARGET MATCHED [{confidence_pct:.1f}%]"
+                elif is_potential:
+                    box_color = (0, 128, 255)
+                    label = f"POTENTIAL TARGET [Color Sim: {color_sim * 100.0:.1f}%]"
+                else:
+                    box_color = (255, 0, 0)
+                    label = f"Person (C:{color_sim * 100.0:.1f}%)"
+                    
+                cv2.rectangle(frame, (px1, py1), (px2, py2), box_color, 2)
+                cv2.putText(frame, label, (px1, py1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, box_color, 2)
+                
+            ret, jpeg_buffer = cv2.imencode('.jpg', frame)
+            if not ret:
+                continue
+            frame_bytes = jpeg_buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+    finally:
+        # Guarantee camera release when generator is closed
+        with cap_lock:
+            if cap is not None:
+                cap.release()
+                cap = None
+        print("[INFO] Camera stream generator terminated and camera released.")
 
 @app.post("/api/start")
 async def start_feed():
-    global is_running, surveillance_thread, target_color_hsv
+    global is_running, target_color_hsv
     if target_color_hsv is None:
         raise HTTPException(status_code=400, detail="No target profile registered. Please register target first.")
         
-    if is_running:
-        return {"status": "already_running", "message": "Surveillance feed is already active."}
-        
     is_running = True
-    surveillance_thread = threading.Thread(target=run_surveillance, daemon=True)
-    surveillance_thread.start()
-    return {"status": "success", "message": "Live webcam surveillance feed initialized."}
+    return {"status": "success", "message": "Surveillance camera pipeline enabled."}
 
 @app.post("/api/stop")
 async def stop_feed():
     global is_running
-    if not is_running:
-        return {"status": "not_running", "message": "Surveillance is not active."}
-        
     is_running = False
-    return {"status": "success", "message": "Halting camera loop..."}
+    return {"status": "success", "message": "Surveillance camera pipeline disabled."}
+
+@app.get("/api/stream")
+async def video_stream():
+    global is_running
+    if not is_running:
+        raise HTTPException(status_code=400, detail="Surveillance feed is not active. Call /api/start first.")
+    return StreamingResponse(gen_frames(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 @app.get("/api/status")
 async def get_status():

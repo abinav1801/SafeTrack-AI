@@ -34,28 +34,12 @@ export default function VideoStream({ isTargetRegistered, targetData }) {
       
       <div className="video-viewport">
         {active ? (
-          <div className="video-placeholder active-feed">
-            {/* Simulation grid overlay */}
-            <div className="hud-grid"></div>
-            <div className="hud-corner top-left"></div>
-            <div className="hud-corner top-right"></div>
-            <div className="hud-corner bottom-left"></div>
-            <div className="hud-corner bottom-right"></div>
-            
-            <div className="lens-center"></div>
-            
-            {/* Simulated detection card */}
-            <div className="simulated-target-card target-detected">
-              <div className="target-corners"></div>
-              <span className="target-label font-mono">TARGET MATCHED [94.2%]</span>
-            </div>
-
-            <div className="feed-status font-mono">
-              <div>CAM: 01 // FRONT_DESK</div>
-              <div>RESOLUTION: 1280x1280 (insightface)</div>
-              <div>FPS: 28.4 // MODE: DUAL_PRIORITY</div>
-            </div>
-          </div>
+          <img 
+            src="http://localhost:8000/api/stream" 
+            alt="Live Surveillance Feed" 
+            className="preview-image"
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
         ) : (
           <div className="video-placeholder idle-feed">
             <span className="video-placeholder-icon">📺</span>
