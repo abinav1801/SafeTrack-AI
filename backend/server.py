@@ -238,6 +238,7 @@ def gen_frames():
                 color_sim = 0.0
                 face_sim = 0.0
                 face_sim_str = "N/A"
+                label = ""
                 
                 # Human Bounding Box Constraints
                 if box_area < 40000 or aspect_ratio > 1.6:
@@ -257,33 +258,42 @@ def gen_frames():
                         face_sim = calculate_face_similarity(target_face_embedding, associated_face.normed_embedding)
                         face_sim_str = f"{face_sim * 100.0:.1f}%"
                         
-                        # Match logic rules
-                        if face_sim >= 0.58:  # Biometric override
+                        # 1. Target face similarity above 65.0% -> Target Person Found
+                        if face_sim >= 0.65:
                             is_target = True
-                            confidence_pct = 70.0 + ((face_sim - 0.58) / 0.27) * 28.0
-                            confidence_pct = min(99.9, max(70.0, confidence_pct))
-                        elif color_sim >= color_thresh_ratio and face_sim >= face_thresh_ratio:
+                            confidence_pct = face_sim * 100.0
+                            label = f"Target Person Found [{confidence_pct:.1f}%]"
+                        # 2. Combined: both color and face match >= 60.0% -> Target Person Found
+                        elif color_sim >= 0.60 and face_sim >= 0.60:
                             is_target = True
-                            denom = 0.85 - face_thresh_ratio
-                            if denom <= 0:
-                                denom = 0.01
-                            confidence_pct = 70.0 + ((face_sim - face_thresh_ratio) / denom) * 28.0
-                            confidence_pct = min(99.9, max(70.0, confidence_pct))
-                        elif color_sim >= color_thresh_ratio:
+                            confidence_pct = ((face_sim + color_sim) / 2.0) * 100.0
+                            label = f"Target Person Found [{confidence_pct:.1f}%]"
+                        # 3. Potential: color is >= 65.0% -> Same Colored Shirt Found
+                        elif color_sim >= 0.65:
                             is_potential = True
+                            label = f"Same Colored Shirt Found [{color_sim * 100.0:.1f}%]"
                     elif target_face_embedding is None:
-                        if color_sim >= color_thresh_ratio:
+                        # Fallback to clothing-only match if no face embedding was registered for the target
+                        if color_sim >= 0.65:
                             is_target = True
                             confidence_pct = color_sim * 100.0
+                            label = f"Same Colored Shirt Found [{confidence_pct:.1f}%]"
+                    else:
+                        # Target face embedding is registered, but no face detected in the frame for this person
+                        if color_sim >= 0.65:
+                            is_potential = True
+                            label = f"Same Colored Shirt Found [{color_sim * 100.0:.1f}%]"
                             
                 print(f"[DEBUG] Person Box: Color Similarity: {color_sim * 100.0:.1f}%, Face Similarity: {face_sim_str}")
                 
                 if is_target:
                     box_color = (0, 255, 0)
-                    label = f"TARGET MATCHED [{confidence_pct:.1f}%]"
+                    if not label:
+                        label = f"Target Person Found"
                 elif is_potential:
                     box_color = (0, 128, 255)
-                    label = f"POTENTIAL TARGET [Color Sim: {color_sim * 100.0:.1f}%]"
+                    if not label:
+                        label = f"Same Colored Shirt Found"
                 else:
                     box_color = (255, 0, 0)
                     label = f"Person (C:{color_sim * 100.0:.1f}%)"
