@@ -25,27 +25,23 @@ body {
   font-family: 'Inter', sans-serif;
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  height: 100vh;
-  overflow: hidden;
+  min-height: 100vh;
   background-image: 
     radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
     radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.15) 0px, transparent 50%);
   background-attachment: fixed;
-  padding: 1.5rem;
-  box-sizing: border-box;
+  overflow-x: hidden;
+  padding: 2rem;
 }
 
 .app-container {
   max-width: 1400px;
   margin: 0 auto;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
 }
 
 .app-header {
   text-align: center;
-  margin-bottom: 1.25rem;
+  margin-bottom: 2.5rem;
 }
 
 .app-title {
@@ -70,27 +66,19 @@ body {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 400px 1fr;
-  gap: 1.5rem;
-  flex-grow: 1;
-  min-height: 0;
-  height: calc(100vh - 150px);
+  grid-template-columns: 420px 1fr;
+  gap: 2rem;
 }
 
 .sidebar-col {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
+  gap: 2rem;
 }
 
 .main-col {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 0;
 }
 
 /* Glassmorphism Card Style */
@@ -120,14 +108,14 @@ body {
 .card-subtitle {
   font-size: 0.85rem;
   color: var(--text-secondary);
-  margin-bottom: 0.75rem;
+  margin-bottom: 1.5rem;
 }
 
 /* Form Styles */
 .form-layout {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1.25rem;
 }
 
 .upload-container {
@@ -139,7 +127,7 @@ body {
   justify-content: center;
   align-items: center;
   width: 100%;
-  height: 130px;
+  height: 200px;
   border: 2px dashed rgba(255, 255, 255, 0.15);
   border-radius: 12px;
   cursor: pointer;
@@ -273,8 +261,7 @@ body {
   border: 1px solid var(--border-color);
   overflow: hidden;
   position: relative;
-  min-height: 0;
-  height: 100%;
+  min-height: 480px;
 }
 
 .video-placeholder {
