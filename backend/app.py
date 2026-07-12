@@ -22,6 +22,15 @@ def resize_image_if_large(img, max_dim=1024):
         return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
     return img
 
+def robust_imread(path, flags=cv2.IMREAD_COLOR):
+    """
+    Reads an image using standard Python byte reading to bypass issues with
+    ultralytics monkey-patched cv2.imread on Windows systems.
+    """
+    with open(path, 'rb') as f:
+        file_bytes = np.frombuffer(f.read(), dtype=np.uint8)
+    return cv2.imdecode(file_bytes, flags)
+
 def get_target_clothing_color(yolo_model, target_img, target_face_bbox=None, device="cpu"):
     """
     Detects the main person in the target image and extracts their dominant clothing color.
@@ -130,7 +139,7 @@ def main():
         return
 
     print(f"[INFO] Reading target image from: {target_path}")
-    target_img = cv2.imread(target_path)
+    target_img = robust_imread(target_path)
     if target_img is None:
         print("[ERROR] Failed to read target image file.")
         return
